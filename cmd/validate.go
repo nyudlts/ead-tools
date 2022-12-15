@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/xml"
 	"fmt"
+	"github.com/nyudlts/go-aspace"
 	"github.com/spf13/cobra"
 	"io/fs"
 	"log"
@@ -28,12 +30,13 @@ func ignoreDir(name string) bool {
 var validateEadCmd = &cobra.Command{
 	Use: "validate-ead",
 	Run: func(cmd *cobra.Command, args []string) {
-
+		fmt.Println("validate-ead ==")
 		if err := directoryExists(); err != nil {
 			fmt.Fprintf(os.Stderr, err.Error()+"\n")
 			os.Exit(2)
 		}
 
+		fmt.Println("* validating ead files in %s", inputDir)
 		log.Printf("[INFO] validating ead files in %s", inputDir)
 		if err := validateEAD(); err != nil {
 			fmt.Fprintf(os.Stderr, err.Error()+"\n")
@@ -74,6 +77,7 @@ func validateEAD() error {
 }
 
 func walkDirectory(directory string) error {
+	fmt.Println("* validating files in %s", directory)
 	log.Printf("[INFO] validating files in %s", directory)
 	if err := filepath.Walk(directory, func(path string, info fs.FileInfo, err error) error {
 		if !info.IsDir() {
@@ -93,8 +97,26 @@ func validateFile(path string) error {
 	filename := filepath.Base(path)
 	//check that the file has an .xml extension
 	if !xmlPtn.MatchString(filename) {
-		log.Printf("[WARNING] file %s does not end in .xml skipping")
+		log.Printf("[WARNING] file %s does not end in .xml skipping", filename)
 		return nil
+	}
+
+	//get the bytes of a file
+	fileBytes, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("[ERROR] could not read %s", filename)
+		return nil
+	}
+
+	//check that ead is well-formed
+	if err = xml.Unmarshal(fileBytes, new(interface{})); err != nil {
+		log.Printf("[ERROR] %s is not well-formed", filename)
+		return nil
+	}
+
+	//validate
+	if err = aspace.ValidateEAD(fileBytes); err != nil {
+		log.Printf("[ERROR] %s is not valid to EAD 2002 schema")
 	}
 	return nil
 }
